@@ -1,7 +1,10 @@
+import io
 import os
 import subprocess
 import sys
 import time
+import re
+from subprocess import call
 
 import PIL.Image as Im
 import pyocr
@@ -58,7 +61,9 @@ class saram(object):
 
         page = 1 #init page
         process_start = time.time()
-
+        image_list = []
+        # Create a new PDF document
+        report = []
         for img in image_page.sequence: # Every single image in image_page for grayscale conversion in 300 resolution
             
             img_per_page = Image(image=img)
@@ -72,23 +77,27 @@ class saram(object):
             except AttributeError as e:
                 print("Update Wand library: %s" % e)
 
-            img_buf = path + '/' + "saram_" + filename + str(page) + ".png"
+            img_buf = path + '\\' + "saram_" + filename + "-page" + str(page) + ".png"
 
             os.chmod(path, 0o777)
-            img_per_page.save(filename=img_buf)
+            img_per_page.convert('RGB')
 
+            img_per_page.save(filename=img_buf)
+            
+        #    image_list.append(Im.open(img_buf).transpose(Im.ROTATE_270))
+            
             page_start = time.time()
             page_elaboration = time.time() - page_start
             print("page %s - size %s - process %2d sec." % (page, img_per_page.size, page_elaboration))
-                
             page += 1
             img.destroy()
-
+        #pdf_path =  path + '\\' + "saram_" + filename + ".pdf"
+        #image_list[0].save(pdf_path, save_all=True, append_images=image_list[1:])
         process_end = time.time() - process_start
         print("Total elaboration time: %s" % process_end)
     
     def get_rotation_info(self, filename):
-        arguments = ' %s - -psm 0'
+        arguments = ' %s - --psm 0 '
         stdoutdata = subprocess.getoutput('tesseract' + arguments % filename)
         degrees = None
 
@@ -96,21 +105,21 @@ class saram(object):
             print(line)
             info = 'Orientation in degrees: '
             if info in line:
-                degrees = -float(line.replace(info, '').strip())
+                degrees = 360-float(line.replace(info, '').strip())        
         return degrees
 
     def fix_dpi_and_rotation(self, filename, degrees, ext):
         im1 = Im.open(filename)
         print('Fixing rotation %.2f in %s...' % (degrees, filename))
-        im1.rotate(degrees).save(filename)
-        
+
+        im1.rotate( degrees, expand=1).save(filename)
+       
     def main(self, path):
         if bool(os.path.exists(path)):
 
-            directory_path = path + '/OCR-text/' #Create text_conversion folder
+            directory_path = path + '/OCR-text-' #Create text_conversion folder
             count = 0
             other_files = 0
-
             for f in os.listdir(path):
                 ext = os.path.splitext(f)[1] #Split the pathname path into a pair i.e take .png/ .jpg etc
 
@@ -141,14 +150,15 @@ class saram(object):
                 image_file_name = path + '/' + f #Full /dir/path/filename.extension
                 filename = os.path.splitext(f)[0] #Filename without extension
                 filename = ''.join(e for e in filename if e.isalnum() or e == '-') #Join string of filename if it contains alphanumeric characters or -
-                text_file_path = directory_path + filename #Join dir_path with file_name
+                filteredname =  re.sub("(?=-page)(.*)", "", filename)
+                text_file_path = directory_path + filteredname.replace('saram','') + "/" +filename #Join dir_path with file_name
 
                 if ext.lower() not in VALIDITY: #Convert to lowercase and check in validity list          
                     other_files += 1 #Increment if other than validity extension found
                     continue
 
-                if count == 0: #No directory created
-                    self.create_directory(directory_path) #function to create directory
+                if ext.lower() == ".pdf": #Create directory for each PDF file
+                    self.create_directory(directory_path + filename) #function to create directory
                 count += 1
 
                 if ext.lower() == ".pdf": #For PDF
@@ -157,16 +167,16 @@ class saram(object):
                 else:                    
                     degrees = self.get_rotation_info(image_file_name)
 
-                    if degrees:
+                    if degrees or (degrees != 360):
                         self.fix_dpi_and_rotation(image_file_name, degrees, ext)
                                         
-                    subprocess.call(["tesseract", image_file_name, text_file_path], stdout=FNULL) #Fetch tesseract with FNULL in write mode
+                    call(["tesseract", image_file_name, text_file_path], stdout=FNULL) #Fetch tesseract with FNULL in write mode
 
                 print(str(count) + (" file" if count == 1 else " files") + " processed")
             
-            for f in os.listdir(path):
-                 if f.startswith("saram_"):
-                    os.remove(os.path.join(path, f))
+           # for f in os.listdir(path):
+           #      if f.startswith("saram_"):
+                   # os.remove(os.path.join(path, f))
 
             if count + other_files == 0:
                 print("No files found") #No files found
