@@ -77,7 +77,7 @@ class saram(object):
             except AttributeError as e:
                 print("Update Wand library: %s" % e)
 
-            img_buf = path + '\\' + "saram_" + filename + "-page" + str(page) + ".png"
+            img_buf = path + '\\' + "saram_" + filename + "-page-" + str(page) + ".png"
 
             os.chmod(path, 0o777)
             img_per_page.convert('RGB')
@@ -112,7 +112,7 @@ class saram(object):
         im1 = Im.open(filename)
         print('Fixing rotation %.2f in %s...' % (degrees, filename))
 
-        im1.rotate( degrees, expand=1).save(filename)
+        im1.rotate( degrees, expand=1 ).save(filename)
        
     def main(self, path):
         if bool(os.path.exists(path)):
@@ -120,6 +120,7 @@ class saram(object):
             directory_path = path + '/OCR-text-' #Create text_conversion folder
             count = 0
             other_files = 0
+            pdf_filename = ""
             for f in os.listdir(path):
                 ext = os.path.splitext(f)[1] #Split the pathname path into a pair i.e take .png/ .jpg etc
 
@@ -140,7 +141,7 @@ class saram(object):
                     
                     degrees = self.get_rotation_info(image_file_name)
                     print(degrees)
-                    if degrees:
+                    if degrees and (degrees != 360):
                         self.fix_dpi_and_rotation(image_file_name, degrees, ext)
 
             for f in os.listdir(path): #Return list of files in path directory
@@ -157,8 +158,9 @@ class saram(object):
                     other_files += 1 #Increment if other than validity extension found
                     continue
 
-                if ext.lower() == ".pdf": #Create directory for each PDF file
+                if ext.lower() == ".pdf": #No directory created
                     self.create_directory(directory_path + filename) #function to create directory
+                    pdf_filename = directory_path + filename
                 count += 1
 
                 if ext.lower() == ".pdf": #For PDF
@@ -167,16 +169,16 @@ class saram(object):
                 else:                    
                     degrees = self.get_rotation_info(image_file_name)
 
-                    if degrees or (degrees != 360):
+                    if degrees and (degrees != 360):
                         self.fix_dpi_and_rotation(image_file_name, degrees, ext)
                                         
                     call(["tesseract", image_file_name, text_file_path], stdout=FNULL) #Fetch tesseract with FNULL in write mode
 
                 print(str(count) + (" file" if count == 1 else " files") + " processed")
             
-           # for f in os.listdir(path):
-           #      if f.startswith("saram_"):
-                   # os.remove(os.path.join(path, f))
+            for f in os.listdir(path):
+                if f.startswith("saram_"):
+                    os.remove(os.path.join(path, f))
 
             if count + other_files == 0:
                 print("No files found") #No files found
